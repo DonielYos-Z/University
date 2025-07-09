@@ -51,7 +51,8 @@ namespace UniversityApp
                 string[] lines = File.ReadAllLines(filePath);
                 foreach (string line in lines)
                 {
-                    if (line.Contains($"Username: {username}, Password: {password}"))
+                    string hashedPassword = HashPassword(password);
+                    if (line.Contains($"Username: {username}") && line.Contains($"Password: {hashedPassword}"))
                     {
                         if (line.Contains("Approval: Approved"))
                         {
