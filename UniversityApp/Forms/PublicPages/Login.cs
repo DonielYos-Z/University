@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -44,12 +44,20 @@ namespace UniversityApp
                 {
                     if (line.Contains($"Username: {username}, Password: {password}"))
                     {
-                        found = true;
-                        break;
+                        if (line.Contains("Approval: Approved"))
+                        {
+                            found = true;
+                            break;
+                        }
+                        else
+                        {
+                            throw new UnauthorizedAccessException("Your account is not approved yet. Please wait for approval.");
+                        }
                     }
                 }
                 if (found)
                 {
+
                     this.Hide();
                     MainApp mainForm = new MainApp(this);
                     mainForm.Show();
