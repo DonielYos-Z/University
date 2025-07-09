@@ -73,7 +73,7 @@ namespace UniversityApp
                         throw new InvalidOperationException("A user with the same username, password, or ID already exists!");
                     }
                 }
-                string userEntry = $"Username: {username}, Password: {password}, Full Name: {fullName}, Email: {email}, ID: {idNum}, Group: {groupType}";
+                string userEntry = $"Username: {username}, Password: {password}, Full Name: {fullName}, Email: {email}, ID: {idNum}, Group: {groupType}, Approved: Pending";
                 File.AppendAllLines(filepath, new[] { userEntry });
                 textBox1.Clear();
                 textBox2.Clear();
