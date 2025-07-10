@@ -258,9 +258,26 @@ namespace UniversityApp.Forms.DataModels
                     // Once the teacher is found, replace the "Approval: Pending" with "Approval: Approved"
                     if (lines[i].Contains($"ID: {idNum}") && lines[i].Contains($"Group: Teacher") && lines[i].Contains("Approval: Pending"))
                     {
-                        lines[i] = lines[i].Replace("Approval: Pending", "Approval: Approved");
-                        modified = true;
-                        break;
+                        bool exists = false;
+                        foreach (Professor p in Supervising)
+                        {
+                            if(p.GetID() == idNum)
+                            {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (exists)
+                        {
+                            lines[i] = lines[i].Replace("Approval: Pending", "Approval: Approved");
+                            modified = true;
+                            break;
+                        }
+                        else
+                        {
+                            MessageBox.Show("This teacher is not in the system.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
                     }
                 }
                 // If no teacher with the given ID was found, return a message indicating such
@@ -347,9 +364,26 @@ namespace UniversityApp.Forms.DataModels
                     // Once the student is found, replace the "Approval: Pending" with "Approval: Approved"
                     if (lines[i].Contains($"ID: {idNum}") && lines[i].Contains($"Group: Student") && lines[i].Contains("Approval: Pending"))
                     {
-                        lines[i] = lines[i].Replace("Approval: Pending", "Approval: Approved");
-                        modified = true;
-                        break;
+                        bool exists = false;
+                        foreach (Student s in StudentsInDepartment)
+                        {
+                            if(s.GetID() == idNum)
+                            {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (exists)
+                        {
+                            lines[i] = lines[i].Replace("Approval: Pending", "Approval: Approved");
+                            modified = true;
+                            break;
+                        }
+                        else
+                        {
+                            MessageBox.Show("This student is not in the system.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
                     }
                 }
                 // If no student with the given ID was found, return a message indicating such
