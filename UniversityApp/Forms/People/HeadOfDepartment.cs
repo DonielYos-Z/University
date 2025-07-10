@@ -1,8 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TrackBar;
 
 namespace UniversityApp.Forms.DataModels
@@ -39,6 +41,7 @@ namespace UniversityApp.Forms.DataModels
         }
         public void SetSupervising(List<Person> supervising)
         {
+            // To set the supervising list, it must not be null, and every person in the list must be either a StudentTeacher or Professor (not a HeadOfDepartment)
             if (supervising == null)
                 throw new ArgumentNullException(nameof(supervising), "Supervising list cannot be null.");
             foreach (Person p in supervising)
@@ -81,11 +84,14 @@ namespace UniversityApp.Forms.DataModels
         */
         public string DisplayTracksManaging()
         {
+            // This method displays all of the tracks being managed by the HoD, returning a string of their names
+            // If there are no tracks being managed, return a message indicating such
             if (TracksManaging == null || TracksManaging.Count == 0)
                 return "No tracks being managed.";
             StringBuilder sb = new StringBuilder();
             int count = 0;
             foreach (var track in TracksManaging)
+                // Only saves the name of the track to avoid loops or annoyingly long strings that are difficult to read
                 sb.AppendLine("#"+count+": "+track.GetName());
             return sb.ToString();
         }
@@ -129,12 +135,16 @@ namespace UniversityApp.Forms.DataModels
         */
         public string DisplayCoursesManaging()
         {
+            // This method displays all of the courses in the tracks being managed by the HoD, returning a string of their names
+            // If there are no tracks being managed, return a message indicating such
             if (TracksManaging == null || TracksManaging.Count == 0)
                 return "No tracks being managed.";
             StringBuilder sb = new StringBuilder();
             foreach (var track in TracksManaging)
             {
+                // Only saves the name of the track/courses to avoid loops or annoyingly long strings that are difficult to read
                 sb.AppendLine($"Courses in {track.GetName()}: ");
+                // If the track has courses, display their names, otherwise display a message indicating no courses in the track
                 if (track.GetCourses() != null && track.GetCourses().Count > 0)
                     sb.AppendLine($"{string.Join(", ", track.GetCourses().Select(c => c.GetName()))}");
                 else
@@ -144,9 +154,18 @@ namespace UniversityApp.Forms.DataModels
         }
         public void AddCourseToTrack(StudyTrack track, Course course)
         {
-        // To add a course to a track, both the track and course must not be null, and the course must not already exist in the track's course list
+            // To add a course to a track, both the track and course must not be null, and the course must not already exist in the track's course list
             if (track != null && course != null && !track.GetCourses().Contains(course))
+            {
                 track.GetCourses().Add(course);
+                // For each student enrolled in the track...
+                foreach (Student student in track.GetStudents())
+                {
+                    // If the student is not already enrolled in the course, enroll them in it
+                    if (!course.GetStudents().Contains(student))
+                        course.GetStudents().Add(student);
+                }
+            }
             else if (track == null)
                 throw new ArgumentNullException(nameof(track), "Track cannot be null.");
             else if (course == null)
@@ -189,35 +208,70 @@ namespace UniversityApp.Forms.DataModels
         /* --- Teacher Management ---
          * These methods display all of the teachers (student teachers and professors) the Head of Department is supervising
          * (name and the courses they are teaching), add a teacher to the list of teachers they are supervising,
-         * remove a teacher from the list, and update a specific teacher, swapping it out for a different teacher
+         * remove a teacher from the list, and update a specific teacher, swapping it out for a different teacher.
+         * Teachers are added by an outside source by the university itself, not the HoD.
         */
         public string displayTeachersSupervising()
         {
+            // This method displays all of the teachers being supervised by the HoD, returning a string of their names and courses they are teaching
+            // If there are no teachers being supervised, return a message indicating such
             if (Supervising == null || Supervising.Count == 0)
                 return ("No teachers being supervised.");
             StringBuilder sb = new StringBuilder();
             foreach (var teacher in Supervising)
             {
-                sb.AppendLine($"Teacher: {teacher.GetName()}");
+                // Only saves the name of the teacher/course to avoid loops or annoyingly long strings that are difficult to read
+                // Notes if teacher is a professor or student teacher
                 if (teacher is Professor prof)
+                {
+                    sb.AppendLine($"Professor: {teacher.GetName()}");
                     sb.AppendLine($"Courses Teaching: {string.Join(", ", prof.GetCoursesTeaching().Select(c => c.GetName()))}");
+                }
                 else if (teacher is StudentTeacher st)
+                {
+                    sb.AppendLine($"Student Teacher: {teacher.GetName()}");
                     sb.AppendLine($"Courses Teaching: {string.Join(", ", st.GetCoursesTeaching().Select(c => c.GetName()))}");
+                }
             }
             return (sb.ToString());
         }
-        public void AddTeacher(Person teacher)
+        //The HoD doesn't hire teachers or assigns them to courses. That is the university's job. He does, however, approve the teachers to their position.
+        public void ApproveTeacher(string idNum)
         {
-            // To add a teacher, it must not be null, it must be a non-HoD Professor or StudentTeacher,
-            // and it must not already exist in the list of teachers the HoD is supervising
-            if ( teacher != null && (teacher is Professor || teacher is StudentTeacher) && !(teacher is HeadOfDepartment) && !Supervising.Contains(teacher))
-                Supervising.Add(teacher);
-            else if (teacher == null)
-                throw new ArgumentNullException(nameof(teacher), "Teacher cannot be null.");
-            else if (!(teacher is Professor || teacher is StudentTeacher) || teacher is HeadOfDepartment)
-                throw new ArgumentException("Head of Department can only supervise student teachers and professors that aren't Head of Department.");
+            // To approve a teacher, the ID number must not be null, and the teacher must exist in the list of teachers being managed with a pending registration
+            if (idNum == null)
+                throw new ArgumentNullException(nameof(idNum), "ID cannot be null.");
             else
-                throw new ArgumentException("This teacher already exists in the list of supervising teachers.");
+            {
+                // Make sure the user file exists, and read it to find the teacher with the given ID number
+                // If the file doesn't exist, return an appropriate message
+                var path = "users.txt";
+                if (!File.Exists(path))
+                {
+                    MessageBox.Show("User file not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                var lines = File.ReadAllLines(path).ToList();
+                bool modified = false;
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    // Once the teacher is found, replace the "Approval: Pending" with "Approval: Approved"
+                    if (lines[i].Contains($"ID: {idNum}") && lines[i].Contains($"Group: Teacher") && lines[i].Contains("Approval: Pending"))
+                    {
+                        lines[i] = lines[i].Replace("Approval: Pending", "Approval: Approved");
+                        modified = true;
+                        break;
+                    }
+                }
+                // If no teacher with the given ID was found, return a message indicating such
+                if (!modified)
+                {
+                    MessageBox.Show("No pending registration found for that ID.");
+                    return;
+                }
+                // Save changes to file
+                File.WriteAllLines(path, lines);
+            }
         }
         public void RemoveTeacher(Person teacher)
         {
@@ -252,14 +306,18 @@ namespace UniversityApp.Forms.DataModels
         }
         /* --- Student Management ---
          * These methods display all of the students in the Head of Department's department (name and the tracks they are learning),
-         * add a student to that list of students in the HoF's department, remove a student from that list, 
-         * and update a specific student, swapping it out for a different student
+         * approve an accuont of a student in that list of students in the HoF's department, remove a student from that list, 
+         * and update a specific student, swapping it out for a different student (to change any details or make the student a student teacher).
+         * Students are added by an outside source by the university itself, not the HoD.
         */
         public string DisplayStudentsInDepartment()
         {
+            // This method displays all of the students in the HoD's department, returning a string of their names and study tracks
+            // If there are no students in the department, return a message indicating such
             if (StudentsInDepartment == null || StudentsInDepartment.Count == 0)
                 return "No students in the department.";
             StringBuilder sb = new StringBuilder();
+            // Only saves the name of the student/track to avoid loops or annoyingly long strings that are difficult to read
             foreach (var student in StudentsInDepartment)
             {
                 sb.AppendLine($"Student: {student.GetName()}");
@@ -267,21 +325,52 @@ namespace UniversityApp.Forms.DataModels
             }
             return sb.ToString();
         }
-        public void AddStudent(Student student)
+        public void ApproveStudent(string idNum)
         {
-            // To add a student, it must not be null and it must not already exist in the list of students in the department
-            if (student != null && !StudentsInDepartment.Contains(student))
-                StudentsInDepartment.Add(student);
-            else if (student == null)
-                throw new ArgumentNullException(nameof(student), "Student cannot be null.");
+            // To approve a student, the ID number must not be null, and the student must exist in the list of students in the department with a pending registration
+            if (idNum == null)
+                throw new ArgumentNullException(nameof(idNum), "ID cannot be null.");
             else
-                throw new ArgumentException("This student already exists in the list of students in the department.");
+            {
+                // Make sure the user file exists, and read it to find the student with the given ID number
+                // If the file doesn't exist, return an appropriate message
+                var path = "users.txt";
+                if (!File.Exists(path))
+                {
+                    MessageBox.Show("User file not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                var lines = File.ReadAllLines(path).ToList();
+                bool modified = false;
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    // Once the student is found, replace the "Approval: Pending" with "Approval: Approved"
+                    if (lines[i].Contains($"ID: {idNum}") && lines[i].Contains($"Group: Student") && lines[i].Contains("Approval: Pending"))
+                    {
+                        lines[i] = lines[i].Replace("Approval: Pending", "Approval: Approved");
+                        modified = true;
+                        break;
+                    }
+                }
+                // If no student with the given ID was found, return a message indicating such
+                if (!modified)
+                {
+                    MessageBox.Show("No pending registration found for that ID.");
+                    return;
+                }
+                // Save changes to file
+                File.WriteAllLines(path, lines);
+            }
         }
         public void RemoveStudent(Student student)
         {
             // To remove a student, it must not be null and it must exist in the list of students in the department
             if (student != null && StudentsInDepartment.Contains(student))
+            {
+                // Remove the student from all courses in their study track, and then remove them from the department
+                RemoveStudentFromCourses(student);
                 StudentsInDepartment.Remove(student);
+            }
             else if (student == null)
                 throw new ArgumentNullException(nameof(student), "Student cannot be null.");
             else
@@ -306,18 +395,20 @@ namespace UniversityApp.Forms.DataModels
             }
         }
         // --- Assignment Methods ---
-        // The following methods assigns pre-existing students/teachers to pre-existing tracks/courses.
+        // The following methods assigns pre-existing students/teachers to their tracks/courses, or re-assigns them to a different one.
         public void AssignStudentToTrack(Student student, StudyTrack track)
         {
             // To assign a student to a track, both the student and track must not be null, and the student must not yet be in the track's student list.
             if (student != null && track != null && !track.GetStudents().Contains(student))
             {
                 track.GetStudents().Add(student);
-                // If the student is already enrolled in a different track, remove them from that track
+                // If the student is already enrolled in a different track, remove them from that track and unassign them from their courses, and add them to their new track, assigning them to all courses in that track.
                 if (student.GetStudyTrack() != track)
                 {
+                    RemoveStudentFromCourses(student);
                     student.GetStudyTrack().GetStudents().Remove(student);
                     student.SetStudyTrack(track);
+                    AssignStudentToCourses(student);
                 }
             }
             else if (student != null && track != null && track.GetStudents().Contains(student))
@@ -331,21 +422,77 @@ namespace UniversityApp.Forms.DataModels
             else
                 throw new ArgumentException("This student is already enrolled in the track.");
         }
-        public void AssignStudentToCourse(Student student, Course course)
+        public void AssignStudentToCourses(Student student)
         {
-            if (student != null && course != null && !course.GetStudents().Contains(student))
-                course.GetStudents().Add(student);
+            // This method assigns a student to all courses in their study track.
+            // Make sure the student isn't null
+            if (student == null)
+                throw new ArgumentNullException(nameof(student), "Student cannot be null.");
+            else
+            {
+                // For each course in their StudyTrack...
+                foreach (Course c in student.GetStudyTrack().GetCourses())
+                {
+                    // If they aren't already enrolled, enroll them in the course. Otherwise, move on to the next course.
+                    if (!c.GetStudents().Contains(student))
+                        c.GetStudents().Add(student);
+                    else
+                        continue;
+                }
+            }
+        }
+        public void RemoveStudentFromCourses(Student student)
+        {
+            // This method removes a student from all courses in their study track.
+            // Make sure the student isn't null
+            if (student == null)
+                throw new ArgumentNullException(nameof(student), "Student cannot be null.");
+            else
+            {
+                // For each course in their StudyTrack...
+                foreach (Course c in student.GetStudyTrack().GetCourses())
+                {
+                    // If they haven't already been removed, remove them from the course. Otherwise, move on to the next course.
+                    if (c.GetStudents().Contains(student))
+                        c.GetStudents().Remove(student);
+                    else
+                        continue;
+                }
+            }
         }
         public void AssignTeacherToCourse(Person teacher, Course course)
         {
-            if ((teacher is Professor || teacher is StudentTeacher) && course != null)
+            if (teacher == null)
+                throw new ArgumentNullException(nameof(teacher), "Teacher cannot be null.");
+            if (course == null)
+                throw new ArgumentNullException(nameof(course), "Course cannot be null.");
+            if (teacher is Professor || teacher is StudentTeacher)
             {
-                // You may want to add logic to associate the teacher with the course
-                // For example, if Professor/StudentTeacher has a CoursesTeaching list:
-                if (teacher is Professor prof && !prof.GetCoursesTeaching().Contains(course))
-                    prof.GetCoursesTeaching().Add(course);
-                else if (teacher is StudentTeacher st && !st.GetCoursesTeaching().Contains(course))
-                    st.GetCoursesTeaching().Add(course);
+                // If the teacher is head of the department, a professor, or a student teacher, add the course to the list of courses they teach, if it isn't already there
+                // If it is already there, or the teacher isn't head of the department, a professor, or a student teacher, throw an appropriate exception.
+                if (teacher is HeadOfDepartment hod)
+                {
+                    if (!hod.GetCoursesTeaching().Contains(course))
+                        hod.GetCoursesTeaching().Add(course);
+                    else
+                        throw new ArgumentException("This course is already being taught by the head of the department.");
+                }
+                else if (teacher is Professor prof)
+                {
+                    if (!prof.GetCoursesTeaching().Contains(course))
+                        prof.GetCoursesTeaching().Add(course);
+                    else
+                        throw new ArgumentException("This course is already being taught by this professor.");
+                } 
+                else if (teacher is StudentTeacher st)
+                {
+                    if(!st.GetCoursesTeaching().Contains(course))
+                        st.GetCoursesTeaching().Add(course);
+                    else
+                        throw new ArgumentException("This course is already being taught by this student teacher.");
+                }   
+                else
+                    throw new ArgumentException("Teacher must be head of the department, a professor, or a student teacher.");
             }
         }
     }
